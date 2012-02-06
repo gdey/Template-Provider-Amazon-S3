@@ -64,7 +64,7 @@ use Try::Tiny;
   This is the Amazon Access key, if this is not provided we will try
   and load this from the AWS_ACCESS_KEY_ID environment variable.
 
-=item B<secrete>
+=item B<secret>
 
   This is the Amazon Secret Key, if this is not provided we will try
   and load this from the AWS_ACCESS_KEY_SECRET environment variable.
@@ -149,7 +149,7 @@ sub object {
 sub _init {
   my ( $self, $options ) = @_;
   $self->{ AWS_ACCESS_KEY_ID } = $options->{ key }          || $ENV{AWS_ACCESS_KEY_ID};
-  $self->{ AWS_SECRET_ACCESS_KEY } = $options->{ secrete }  || $ENV{AWS_ACCESS_KEY_SECRET};
+  $self->{ AWS_SECRET_ACCESS_KEY } = $options->{ secret } || $options->{ secrete } || $ENV{AWS_ACCESS_KEY_SECRET};
   $self->{ BUCKETNAME } = $options->{ bucketname }          || $ENV{AWS_TEMPLATE_BUCKET};
   $self->SUPER::_init($options);
 }
