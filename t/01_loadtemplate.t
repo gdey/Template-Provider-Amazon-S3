@@ -33,9 +33,9 @@ sub do_retrieval_test {
    my @keys;
    until( $stream->is_done ){
      foreach my $object ( $stream->items ){
-        diag( 'Found object: '.$object->key );
+        #diag( 'Found object: '.$object->key );
+        #diag( 'Does object exists: '.$object->exists );
         push @keys, [$object->key, !!$object->exists];
-        diag( 'Does object exists: '.$object->exists );
      }
    }
 

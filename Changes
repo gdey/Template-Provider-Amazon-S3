@@ -1,0 +1,10 @@
+Revision history for Template-Provider-Amazon-S3
+
+0.002    6 February 2012
+         Removed some Debug breakpoints that I left in there
+         By mistake. 
+         Also, fixed the pod.
+
+0.001    5 February 2012
+         Initial creation, this is feature compleate.
+      

@@ -36,10 +36,15 @@ use Try::Tiny;
 =over 2
 
 =item fetch()
+
 =item store()
+
 =item load()
+
 =item include_path()
+
 =item paths()
+
 =item DESTROY()
 
 =back
@@ -171,14 +176,11 @@ sub _template_content {
    return wantarray? (undef, 'No path specified to fetch content from')   : undef unless $template;
    return wantarray? (undef, 'No Bucket specified to fetch content from') : undef unless $self->bucket;
    my $object; 
-   {
-      local $@;
-      eval{
-        $DB::signal=1;
+   try {
         $object = $self->object( key => $template );
-      };
-      return wantarray? (undef, 'AWS error: '.$@ ) : undef if $@; 
-   }
+   } catch {
+      return wantarray? (undef, 'AWS error: '.$_ ) : undef;
+   };
 
    return wantarray? (undef, "object ($template) not found") : undef 
        unless $object && $object->exists;
@@ -194,7 +196,9 @@ sub _template_content {
 =over 4 
 
 =item L<Net::Amazon::S3::Client>
+
 =item L<Net::Amazon::S3::Client::Bucket>
+
 =item L<Net::Amazon::S3::Client::Object>
 
 =back
