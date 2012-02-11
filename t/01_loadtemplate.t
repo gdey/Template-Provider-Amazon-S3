@@ -95,8 +95,6 @@ sub do_template_tests {
        skip 'Can not continue without a template object', 2*2 unless $template;
        process_template $template, 'helloworld.tt', { name => 'John' }, qr/Hello\s+John/;
        process_template $template, 'blue/helloworld.tt', { name => 'John' }, qr/Blue Hello\s+John/;
-
-
     }
 }
 
