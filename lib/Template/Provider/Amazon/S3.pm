@@ -193,7 +193,6 @@ sub _init {
 sub _template_modified {
    my ($self, $template) = @_;
    $template =~s#^\./##;
-   
    my $object;
    try {
       $object = $self->object( key => $template );
@@ -206,25 +205,22 @@ sub _template_modified {
 }
 
 sub _template_content {
-
    my ($self, $template) = @_;
    $template =~s#^\./##;
    return wantarray? (undef, 'No path specified to fetch content from')   : undef unless $template;
    return wantarray? (undef, 'No Bucket specified to fetch content from') : undef unless $self->bucket;
    my $object; 
    try {
-        $object = $self->object( key => $template );
+      $object = $self->object( key => $template );
    } catch {
       return wantarray? (undef, 'AWS error: '.$_ ) : undef;
    };
-
    return wantarray? (undef, "object ($template) not found") : undef 
        unless $object && $object->exists;
    my $data = $object->get;
    my $ldate = $object->last_modified || DateTime->now;
    $mod_date = $ldate->epoch;
    return wantarray? ($data, undef, $mod_date) : $data;
-
 }
 
 =head1 SEE ALSO
