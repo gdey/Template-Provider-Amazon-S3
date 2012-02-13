@@ -8,7 +8,6 @@ use Net::Amazon::S3::Client;
 use DateTime;
 use Try::Tiny;
 use List::MoreUtils qw( uniq );
-use feature 'say';
 
 =head1 SYNOPSIS
 
@@ -163,7 +162,6 @@ sub object {
 
 
    foreach my $path_key ( @paths ) {
-       say "# Looking for $path_key";
        $obj = $self->cache( $path_key );
        return $obj if $obj;
    }
