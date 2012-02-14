@@ -134,6 +134,33 @@ sub cache {
 };
 }
 
+=method refresh_cache
+
+  Call this method to refresh the in memory store.
+
+=cut 
+
+sub refresh_cache {
+
+   my $self = shift;
+   my $key = shift;
+   my $bucket = $self->bucket;
+   return unless $bucket;
+   my $stream = $bucket->list;
+   until ( $stream->is_done ){
+      foreach $object ( $stream->items ) {
+         $self->cache( $object->key => $object );
+      }
+   }
+   return unless $key and defined wantarray ;
+   my @paths = $self->_get_paths($key);
+   foreach my $path_key ( @paths ) {
+       $obj = $self->cache( $path_key );
+       return $obj if $obj;
+   }
+   return;
+}
+
 =method object
 
    returns the object for a given key. 
@@ -149,35 +176,20 @@ sub _get_paths {
     my $self = shift;
     my $key = shift;
     my @paths = grep { defined } map { /^\s*$/ ? undef : $_  } uniq 
-                map { _clean_up_path $_ } ('', @{$self->include_path} );
+                 map { _clean_up_path $_ } ('', @{$self->include_path} );
     return ( $key , map { join '/',$_,$key } @paths ) 
 }
    
 sub object {
-
    my ($self, %args) = @_;
    my $key = $args{key};
    return unless $key;
    my @paths = $self->_get_paths($key);
-
-
    foreach my $path_key ( @paths ) {
        $obj = $self->cache( $path_key );
        return $obj if $obj;
    }
-   my $bucket = $self->bucket;
-   return unless $bucket;
-   my $stream = $bucket->list;
-   until ( $stream->is_done ){
-      foreach $object ( $stream->items ) {
-         $self->cache( $object->key => $object );
-      }
-   }
-   foreach my $path_key ( @paths ) {
-       $obj = $self->cache( $path_key );
-       return $obj if $obj;
-   }
-   return;
+   return $self->refresh_cache( $key );
 }
 
 sub _init {
