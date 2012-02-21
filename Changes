@@ -1,4 +1,7 @@
 Revision history for Template-Provider-Amazon-S3
+0.005    21 February 2012
+         The refresh of cache logic was not good enough, imporved it a bit.
+
 0.004    14 February 2012
          Left an errant say statement.
          Fixed an issue with the cache not refreshing.
