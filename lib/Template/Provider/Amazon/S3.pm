@@ -125,13 +125,22 @@ sub bucket {
    return unless $self->client;
    $self->{BUCKET} = $client->bucket( name => $self->{ BUCKETNAME } );
 }
+
+
+=method last_refresh
+  
+  This method will return the DateTime object of the last
+  time the internal cache was refreshed.
+
+=cut
+
 {
-my %cache = ();
-sub cache {
-   my ($self, $key, $obj) = @_;
-   $cache{$key} = $obj if $obj;
-   $cache{$key}
-};
+   my $last_refresh;
+   sub _set_last_refresh {
+     my ($self, $time) = @_;
+     $last_refresh = $time? $time : DateTime->now;
+   }
+   sub last_refresh { $last_refresh || _set_last_refresh }
 }
 
 =method refresh_cache
@@ -139,26 +148,35 @@ sub cache {
   Call this method to refresh the in memory store.
 
 =cut 
+{
+   my %cache = ();
+   sub cache {
+      my ($self, $key) = @_;
+      $cache{$key}
+   };
 
-sub refresh_cache {
-
-   my $self = shift;
-   my $key = shift;
-   my $bucket = $self->bucket;
-   return unless $bucket;
-   my $stream = $bucket->list;
-   until ( $stream->is_done ){
-      foreach $object ( $stream->items ) {
-         $self->cache( $object->key => $object );
+   sub refresh_cache {
+   
+      my $self = shift;
+      my $key = shift;
+      my $bucket = $self->bucket;
+      return unless $bucket;
+      my $stream = $bucket->list;
+      until ( $stream->is_done ){
+         foreach $object ( $stream->items ) {
+            $cache{ $object->key } = $object;
+         }
       }
+      $self->_set_last_refresh;
+      return unless $key and defined wantarray ;
+      my @paths = $self->_get_paths($key);
+      foreach my $path_key ( @paths ) {
+          $obj = $self->cache( $path_key );
+          return $obj if $obj;
+      }
+      return;
    }
-   return unless $key and defined wantarray ;
-   my @paths = $self->_get_paths($key);
-   foreach my $path_key ( @paths ) {
-       $obj = $self->cache( $path_key );
-       return $obj if $obj;
-   }
-   return;
+
 }
 
 =method object
@@ -194,9 +212,18 @@ sub object {
 
 sub _init {
   my ( $self, $options ) = @_;
-  $self->{ AWS_ACCESS_KEY_ID } = $options->{ key }          || $ENV{AWS_ACCESS_KEY_ID};
-  $self->{ AWS_SECRET_ACCESS_KEY } = $options->{ secret } || $options->{ secrete } || $ENV{AWS_ACCESS_KEY_SECRET};
-  $self->{ BUCKETNAME } = $options->{ bucketname }          || $ENV{AWS_TEMPLATE_BUCKET};
+  $self->{ AWS_ACCESS_KEY_ID }     =    $options->{ key }                
+                                     || $ENV{ AWS_ACCESS_KEY_ID };
+  $self->{ AWS_SECRET_ACCESS_KEY } =    $options->{ secret }             
+                                     || $options->{ secrete } 
+                                     || $ENV{ AWS_ACCESS_KEY_SECRET };
+  $self->{ BUCKETNAME }            =    $options->{ bucketname }         
+                                     || $ENV{ AWS_TEMPLATE_BUCKET };
+  $self->{ REFRESH_IN_SECONDS }    =    $options->{ refresh_in_seconds } 
+                                     || $ENV{ TEMPLATE_AWS_REFRESH_IN_SECONDS } 
+                                     || 86400; # Default is a day.
+
+  $self->refresh_cache;
   $self->SUPER::_init($options);
 }
 
@@ -205,7 +232,15 @@ sub _template_modified {
    $template =~s#^\./##;
    my $object;
    try {
-      $object = $self->object( key => $template );
+      my $refresh_seconds = $self->{ REFRESH_IN_SECONDS };
+      my $now = DateTime->now;
+      my $last_refresh = $self->last_refresh;
+      my $duration = $now->subtract_datetime_absolute( $last_refresh );
+      if( $duration->seconds > $refresh_seconds ) {
+          $object = $self->refresh_cache( $template );
+      } else {
+          $object = $self->object( key => $template );
+      };
    } catch {
       return undef;
    };
