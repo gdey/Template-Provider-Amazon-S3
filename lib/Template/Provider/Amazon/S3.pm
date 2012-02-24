@@ -1,4 +1,10 @@
+use 5.10.0;
+use feature 'state';
+use strict;
+use warnings;
+
 package Template::Provider::Amazon::S3;
+
 # ABSTRACT: Enable template toolkit to use Amazon's S3 service as a provier of templates.
 use base 'Template::Provider';
 
@@ -8,6 +14,8 @@ use Net::Amazon::S3::Client;
 use DateTime;
 use Try::Tiny;
 use List::MoreUtils qw( uniq );
+use CHI 0.50;
+use JSON qw(decode_json);
 
 =head1 SYNOPSIS
 
@@ -82,6 +90,26 @@ use List::MoreUtils qw( uniq );
   template. This method is really naive, and just prepends each entry to 
   the template name. 
 
+=item B<refresh_in_seconds>
+
+   This is the number of seconds that the cache will expire. The default for this
+   is 86400 seconds, which is 1 day. This value can also be set via the environment
+   variable TEMPLATE_AWS_REFRESH_IN_SECONDS.
+
+=item B<cache_options>
+
+   This is the options to provide to the L<CHI> cache module. This can also be set
+   by the environment variable TEMPLATE_CACHE_OPTIONS. If using the environment 
+   variable, the values need to be L<JSON>  encoded. Otherwise the value will be 
+   an in memory store. The option send is the following:
+
+     
+     {
+         driver => 'RawMemory', 
+         global => 1 
+     }
+
+
 =back
 
 
@@ -92,6 +120,42 @@ use List::MoreUtils qw( uniq );
 
 =cut
 
+sub _init {
+    my ( $self, $options ) = @_;
+    $self->{AWS_ACCESS_KEY_ID} = $options->{key}
+      || $ENV{AWS_ACCESS_KEY_ID};
+    $self->{AWS_SECRET_ACCESS_KEY} =
+         $options->{secret}
+      || $options->{secrete}
+      || $ENV{AWS_ACCESS_KEY_SECRET};
+    $self->{BUCKETNAME} = $options->{bucketname}
+      || $ENV{AWS_TEMPLATE_BUCKET};
+    $self->{REFRESH_IN_SECONDS} =
+         $options->{refresh_in_seconds}
+      || $ENV{TEMPLATE_AWS_REFRESH_IN_SECONDS}
+      || 86400;    # Default is a day.
+
+    my $cache_opts = $options->{cache_options};
+
+    if ( $ENV{AWS_S3_TEMPLATE_CACHE_OPTIONS} && !$cache_opts ) {
+
+        try {
+            $cache_opts = decode_json( $ENV{TEMPLATE_CACHE_OPTIONS} );
+        }
+        catch {
+            warn
+"Found environment variable TEMPLATE_CACHE_OPTIONS, but it does not seem be JSON encoded. ERROR: $_";
+            $cache_opts = undef;
+        };
+
+    }
+    $cache_opts ||= { driver => 'RawMemory', global => 1 };
+    $self->{CACHE_OPTIONS} = $cache_opts;
+
+    $self->refresh_cache;
+    $self->SUPER::_init($options);
+}
+
 =method client
 
   This method will return the S3 client.
@@ -99,15 +163,15 @@ use List::MoreUtils qw( uniq );
 =cut
 
 sub client {
- 
-  my $self = shift;
-  return $self->{CLIENT} if $self->{CLIENT};
-  my $s3 = Net::Amazon::S3->new(
-      aws_access_key_id => $self->{ AWS_ACCESS_KEY_ID },
-      aws_secret_access_key => $self->{ AWS_SECRET_ACCESS_KEY },
-      retry => 1,
-  );
-  $self->{ CLIENT } = Net::Amazon::S3::Client->new( s3 => $s3 );
+
+    my $self = shift;
+    return $self->{CLIENT} if $self->{CLIENT};
+    my $s3 = Net::Amazon::S3->new(
+        aws_access_key_id     => $self->{AWS_ACCESS_KEY_ID},
+        aws_secret_access_key => $self->{AWS_SECRET_ACCESS_KEY},
+        retry                 => 1,
+    );
+    $self->{CLIENT} = Net::Amazon::S3::Client->new( s3 => $s3 );
 
 }
 
@@ -117,15 +181,14 @@ sub client {
 
 =cut
 
-sub bucket { 
-   my $self = shift;
-   return $self->{BUCKET} if $self->{BUCKET};
-   return  unless $self->{ BUCKETNAME };
-   my $client = $self->client;
-   return unless $self->client;
-   $self->{BUCKET} = $client->bucket( name => $self->{ BUCKETNAME } );
+sub bucket {
+    my $self = shift;
+    return $self->{BUCKET} if $self->{BUCKET};
+    return unless $self->{BUCKETNAME};
+    my $client = $self->client;
+    return unless $self->client;
+    $self->{BUCKET} = $client->bucket( name => $self->{BUCKETNAME} );
 }
-
 
 =method last_refresh
   
@@ -135,47 +198,47 @@ sub bucket {
 =cut
 
 {
-   my $last_refresh;
-   sub _set_last_refresh {
-     my ($self, $time) = @_;
-     $last_refresh = $time? $time : DateTime->now;
-   }
-   sub last_refresh { $last_refresh || _set_last_refresh }
+    my $last_refresh;
+
+    sub _set_last_refresh {
+        my ( $self, $time ) = @_;
+        $last_refresh = $time ? $time : DateTime->now;
+    }
+    sub last_refresh { $last_refresh || _set_last_refresh }
 }
 
 =method refresh_cache
 
-  Call this method to refresh the in memory store.
+  Call this method to refresh the cache.
 
 =cut 
-{
-   my %cache = ();
-   sub cache {
-      my ($self, $key) = @_;
-      $cache{$key}
-   };
 
-   sub refresh_cache {
-   
-      my $self = shift;
-      my $key = shift;
-      my $bucket = $self->bucket;
-      return unless $bucket;
-      my $stream = $bucket->list;
-      until ( $stream->is_done ){
-         foreach $object ( $stream->items ) {
-            $cache{ $object->key } = $object;
-         }
-      }
-      $self->_set_last_refresh;
-      return unless $key and defined wantarray ;
-      my @paths = $self->_get_paths($key);
-      foreach my $path_key ( @paths ) {
-          $obj = $self->cache( $path_key );
-          return $obj if $obj;
-      }
-      return;
-   }
+{
+    my %cache = ();
+
+    sub cache {
+        my ( $self, $key ) = @_;
+        state $cache = CHI->new( %{ $self->{CACHE_OPTIONS} } );
+        return $cache unless $key;
+        return $cache->get($key);
+    }
+
+    sub refresh_cache {
+
+        my $self   = shift;
+        my $key    = shift;
+        my $bucket = $self->bucket;
+        return unless $bucket;
+        my $stream = $bucket->list;
+        until ( $stream->is_done ) {
+            foreach my $object ( $stream->items ) {
+                $self->cache->set( $object->key, $object,
+                    $self->{REFRESH_IN_SECONDS} );
+            }
+        }
+        $self->_set_last_refresh;
+        return $self->_get_object( key => $key );
+    }
 
 }
 
@@ -188,84 +251,79 @@ sub bucket {
 
 =cut
 
-sub _clean_up_path($) { join '/', grep { $_!~/\.{1,2}/ } split '/', shift };
+sub _clean_up_path($) {
+    join '/', grep { $_ !~ /\.{1,2}/ } split '/', shift;
+}
 
 sub _get_paths {
-    my $self = shift;
-    my $key = shift;
-    my @paths = grep { defined } map { /^\s*$/ ? undef : $_  } uniq 
-                 map { _clean_up_path $_ } ('', @{$self->include_path} );
-    return ( $key , map { join '/',$_,$key } @paths ) 
+    my $self  = shift;
+    my $key   = shift;
+    my @paths = grep { defined } map { /^\s*$/ ? undef : $_ } uniq
+      map { _clean_up_path $_ } ( '', @{ $self->include_path } );
+    return ( $key, map { join '/', $_, $key } @paths );
 }
-   
+
+sub _get_object {
+    my ( $self, %args ) = @_;
+    my $key = $args{key};
+    return unless $key and defined wantarray;
+    my @paths = $self->_get_paths($key);
+    foreach my $path_key (@paths) {
+        my $obj = $self->cache($path_key);
+        return $obj if $obj;
+    }
+    return;
+}
+
 sub object {
-   my ($self, %args) = @_;
-   my $key = $args{key};
-   return unless $key;
-   my @paths = $self->_get_paths($key);
-   foreach my $path_key ( @paths ) {
-       $obj = $self->cache( $path_key );
-       return $obj if $obj;
-   }
-   return $self->refresh_cache( $key );
-}
-
-sub _init {
-  my ( $self, $options ) = @_;
-  $self->{ AWS_ACCESS_KEY_ID }     =    $options->{ key }                
-                                     || $ENV{ AWS_ACCESS_KEY_ID };
-  $self->{ AWS_SECRET_ACCESS_KEY } =    $options->{ secret }             
-                                     || $options->{ secrete } 
-                                     || $ENV{ AWS_ACCESS_KEY_SECRET };
-  $self->{ BUCKETNAME }            =    $options->{ bucketname }         
-                                     || $ENV{ AWS_TEMPLATE_BUCKET };
-  $self->{ REFRESH_IN_SECONDS }    =    $options->{ refresh_in_seconds } 
-                                     || $ENV{ TEMPLATE_AWS_REFRESH_IN_SECONDS } 
-                                     || 86400; # Default is a day.
-
-  $self->refresh_cache;
-  $self->SUPER::_init($options);
+    my ( $self, %args ) = @_;
+    my $key = $args{key};
+    return unless $key;
+    my $obj = $self->_get_object( key => $key );
+    return $obj if $obj;
+    return $self->refresh_cache($key);
 }
 
 sub _template_modified {
-   my ($self, $template) = @_;
-   $template =~s#^\./##;
-   my $object;
-   try {
-      my $refresh_seconds = $self->{ REFRESH_IN_SECONDS };
-      my $now = DateTime->now;
-      my $last_refresh = $self->last_refresh;
-      my $duration = $now->subtract_datetime_absolute( $last_refresh );
-      if( $duration->seconds > $refresh_seconds ) {
-          $object = $self->refresh_cache( $template );
-      } else {
-          $object = $self->object( key => $template );
-      };
-   } catch {
-      return undef;
-   };
-   return unless $object;
-   my $ldate = $object->last_modified || DateTime->now;
-   $ldate->epoch;
+    my ( $self, $template ) = @_;
+    $template =~ s#^\./##;
+    my $object;
+    my $ldate;
+    try {
+        $object = $self->object( key => $template );
+        $ldate = $object->last_modified;
+    }
+    catch {
+        $self->cache->remove($template);
+        return undef;
+    };
+    $ldate = DateTime->now unless $ldate;
+    $ldate->epoch;
 }
 
 sub _template_content {
-   my ($self, $template) = @_;
-   $template =~s#^\./##;
-   return wantarray? (undef, 'No path specified to fetch content from')   : undef unless $template;
-   return wantarray? (undef, 'No Bucket specified to fetch content from') : undef unless $self->bucket;
-   my $object; 
-   try {
-      $object = $self->object( key => $template );
-   } catch {
-      return wantarray? (undef, 'AWS error: '.$_ ) : undef;
-   };
-   return wantarray? (undef, "object ($template) not found") : undef 
-       unless $object && $object->exists;
-   my $data = $object->get;
-   my $ldate = $object->last_modified || DateTime->now;
-   $mod_date = $ldate->epoch;
-   return wantarray? ($data, undef, $mod_date) : $data;
+    my ( $self, $template ) = @_;
+    $template =~ s#^\./##;
+    return
+      wantarray ? ( undef, 'No path specified to fetch content from' ) : undef
+      unless $template;
+    return
+      wantarray ? ( undef, 'No Bucket specified to fetch content from' ) : undef
+      unless $self->bucket;
+    my $object;
+    try {
+        $object = $self->object( key => $template );
+        return wantarray ? ( undef, "object ($template) not found" ) : undef
+          unless $object && $object->exists;
+        my $data     = $object->get;
+        my $ldate    = $object->last_modified || DateTime->now;
+        my $mod_date = $ldate->epoch;
+        return wantarray ? ( $data, undef, $mod_date ) : $data;
+    }
+    catch {
+        $self->cache->remove($template);
+        return wantarray ? ( undef, 'AWS error: ' . $_ ) : undef;
+    };
 }
 
 =head1 SEE ALSO
@@ -277,6 +335,8 @@ sub _template_content {
 =item L<Net::Amazon::S3::Client::Bucket>
 
 =item L<Net::Amazon::S3::Client::Object>
+
+=item L<CHI>
 
 =back
 

@@ -1,6 +1,19 @@
 Revision history for Template-Provider-Amazon-S3
+0.006    21 February 2012
+         Changed out my naive cache logic, and replace it with Chi.
+         Added two options
+            * refresh_in_seconds
+               This was added in the last release, but I updated the 
+               doc this release.
+            * cache_options
+               This is passed to CHI->new(); The default is an in memory
+               cache.
+         Added better error handling around getting objects from S3. If
+         and error is thrown, it will remove the item from the cache and
+         try to retrieve it again.
+
 0.005    21 February 2012
-         The refresh of cache logic was not good enough, imporved it a bit.
+         The refresh of cache logic was not good enough, improved it a bit.
 
 0.004    14 February 2012
          Left an errant say statement.
