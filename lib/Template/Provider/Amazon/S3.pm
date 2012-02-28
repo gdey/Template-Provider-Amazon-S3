@@ -135,6 +135,8 @@ sub _init {
       || $ENV{TEMPLATE_AWS_REFRESH_IN_SECONDS}
       || 86400;    # Default is a day.
 
+
+
     my $cache_opts = $options->{cache_options};
 
     if ( $ENV{AWS_S3_TEMPLATE_CACHE_OPTIONS} && !$cache_opts ) {
@@ -143,8 +145,6 @@ sub _init {
             $cache_opts = decode_json( $ENV{TEMPLATE_CACHE_OPTIONS} );
         }
         catch {
-            warn
-"Found environment variable TEMPLATE_CACHE_OPTIONS, but it does not seem be JSON encoded. ERROR: $_";
             $cache_opts = undef;
         };
 
@@ -214,29 +214,55 @@ sub bucket {
 =cut 
 
 {
-    my %cache = ();
 
+
+use Data::Dumper;
+    my $cache;
     sub cache {
-        my ( $self, $key ) = @_;
-        state $cache = CHI->new( %{ $self->{CACHE_OPTIONS} } );
-        return $cache unless $key;
-        return $cache->get($key);
+        my ( $self ) = @_;
+        $cache = CHI->new( %{ $self->{CACHE_OPTIONS} } ) unless $cache;
+        return $cache;
     }
 
     sub refresh_cache {
 
         my $self   = shift;
         my $key    = shift;
+        $DB::Signal = 1;
         my $bucket = $self->bucket;
         return unless $bucket;
         my $stream = $bucket->list;
+        my $today = DateTime->now;
         until ( $stream->is_done ) {
             foreach my $object ( $stream->items ) {
-                $self->cache->set( $object->key, $object,
-                    $self->{REFRESH_IN_SECONDS} );
-            }
+
+               my $exists = !!$object->exists;
+               my $ldate = $object->last_modified || $today;
+               if( !$exists ){ 
+                  $self->cache->set( $object->key,  { 
+                         last_modified => $ldate->epoch,
+                         template_name => $object->key,
+                       template_exists => $exists,
+                     },
+                     $self->{REFRESH_IN_SECONDS},
+                  );
+                  next;
+               };
+               # try {
+                    my $data = $object->get;
+                    $self->cache->set( $object->key,  { 
+                         last_modified => $ldate->epoch,
+                         template_name => $object->key,
+                              template => $data,
+                       template_exists => $exists,
+                    });
+               # } catch {
+                    #warn "Could not get template '".$object->key."' with error $_ ";
+               # };
+               
+            };
+            $self->_set_last_refresh;
         }
-        $self->_set_last_refresh;
         return $self->_get_object( key => $key );
     }
 
@@ -269,9 +295,10 @@ sub _get_object {
     return unless $key and defined wantarray;
     my @paths = $self->_get_paths($key);
     foreach my $path_key (@paths) {
-        my $obj = $self->cache($path_key);
+        my $obj = $self->cache->get($path_key);
         return $obj if $obj;
     }
+    #warn "did not find the $key ";
     return;
 }
 
@@ -291,14 +318,12 @@ sub _template_modified {
     my $ldate;
     try {
         $object = $self->object( key => $template );
-        $ldate = $object->last_modified;
+        $ldate = $object->{last_modified};
     }
     catch {
-        $self->cache->remove($template);
+        #warn "did not find the $template error was thrown $_";
         return undef;
     };
-    $ldate = DateTime->now unless $ldate;
-    $ldate->epoch;
 }
 
 sub _template_content {
@@ -312,16 +337,20 @@ sub _template_content {
       unless $self->bucket;
     my $object;
     try {
-        $object = $self->object( key => $template );
-        return wantarray ? ( undef, "object ($template) not found" ) : undef
-          unless $object && $object->exists;
-        my $data     = $object->get;
-        my $ldate    = $object->last_modified || DateTime->now;
-        my $mod_date = $ldate->epoch;
+        $DB::signal = 1;
+        my $template_obj = $self->object( key => $template );
+        my ( $data, $mod_date ); 
+        if( $template_obj  ){
+           $data = $template_obj->{template};
+           $mod_date = $template_obj->{last_modified};
+        } else {
+           return wantarray ? ( undef, 'File not found ' ) : undef;
+        }
         return wantarray ? ( $data, undef, $mod_date ) : $data;
     }
     catch {
         $self->cache->remove($template);
+        #$self->template_cache->remove($template);
         return wantarray ? ( undef, 'AWS error: ' . $_ ) : undef;
     };
 }

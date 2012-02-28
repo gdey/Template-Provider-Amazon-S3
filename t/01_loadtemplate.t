@@ -40,14 +40,9 @@ sub do_retrieval_test {
    }
 
    foreach my $key_pair ( @keys ) {
-      
-      #my $sobj   = $bucket->object( key => $key_pair->[0] );
       my $object = $ts3->object( key => $key_pair->[0] );
       ok( defined $object , 'Get key: '.$key_pair->[0] );
-      #ok( defined $sobj , 'sobj Get key: '.$key_pair->[0] );
-      ok( !!$object->exists == !!$key_pair->[1] , 'Exists key: '.$key_pair->[0]);
-      #ok( !!$sobj->exists == !!$key_pair->[1] , 'sobj Exists key: '.$key_pair->[0]);
-
+      ok( !!$object->{template_exists} == !!$key_pair->[1] , 'Exists key: '.$key_pair->[0]);
    }
 
 

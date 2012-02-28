@@ -1,4 +1,10 @@
 Revision history for Template-Provider-Amazon-S3
+0.007    21 February 2012
+         Changed out the cache logic, I have replace the complicated 
+         system of two CHI caches with one that just store the things
+         of interest. I think I was starting of over-engineered the 
+         caching. 
+
 0.006    21 February 2012
          Changed out my naive cache logic, and replace it with Chi.
          Added two options
