@@ -24,10 +24,31 @@ use_ok('Template::Provider::Amazon::S3')
 
 }
 
+sub template_setup() {
+    my $ts3 = Template::Provider::Amazon::S3->new(
+       cache_options => { 
+              driver => 'Memcached',
+           namespace => 'templates' ,
+             servers => [ "127.0.0.1:11211" ]
+       },
+    ); #let's use the environment variables.
+    my $template = Template->new( 
+       LOAD_TEMPLATES => [ $ts3 ], 
+       cache_options => { 
+              driver => 'Memcached',
+           namespace => 'templates' ,
+             servers => [ "127.0.0.1:11211" ]
+       },
+       );
+    ok( $template , 'We got a template object');
+    ok( $ts3 , 'We got a Template Provider S3 object');
+    return ($ts3, $template);
+}
+
 sub do_retrieval_test {
 
    #let's use the environment variables.
-   my $ts3 = Template::Provider::Amazon::S3->new(); 
+   my ($ts3, $template) = template_setup;
    my $bucket = $ts3->bucket;
    ok($bucket, "We got a bucket for $ENV{AWS_TEMPLATE_BUCKET} ");
    my $stream = $bucket->list;
@@ -56,7 +77,7 @@ sub do_retrieval_test {
 
 # First we need to get a template object;
 sub do_basic_test {
-    my $ts3 = Template::Provider::Amazon::S3->new(); #let's use the environment variables.
+    my ($ts3, $template) = template_setup;
     
     ok($ts3, 'We got a good provider');
     my ($content,$error,$mod_date) = $ts3->_template_content('helloworld.tt');
@@ -86,26 +107,6 @@ sub process_template($$$$) {
     return $output;
 }
 
-sub template_setup() {
-    my $ts3 = Template::Provider::Amazon::S3->new(
-       cache_options => { 
-              driver => 'Memcached',
-           namespace => 'templates' ,
-             servers => [ "127.0.0.1:11211" ]
-       },
-    ); #let's use the environment variables.
-    my $template = Template->new( 
-       LOAD_TEMPLATES => [ $ts3 ], 
-       cache_options => { 
-              driver => 'Memcached',
-           namespace => 'templates' ,
-             servers => [ "127.0.0.1:11211" ]
-       },
-       );
-    ok( $template , 'We got a template object');
-    ok( $ts3 , 'We got a Template Provider S3 object');
-    return ($ts3, $template);
-}
 
 sub do_template_tests {
     my ($ts3, $template) = template_setup;
@@ -140,6 +141,7 @@ sub do_simple_wrapped_tests {
 }
 
 
+do_retrieval_test;
 do_retrieval_test;
 do_basic_test;
 do_template_tests;
