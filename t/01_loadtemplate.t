@@ -33,8 +33,8 @@ sub do_retrieval_test {
    my @keys;
    until( $stream->is_done ){
      foreach my $object ( $stream->items ){
-        #diag( 'Found object: '.$object->key );
-        #diag( 'Does object exists: '.$object->exists );
+        note( 'Found object: '.$object->key );
+        note( 'Does object exists: '.$object->exists );
         push @keys, [$object->key, !!$object->exists];
      }
    }
@@ -54,7 +54,7 @@ sub do_basic_test {
     
     ok($ts3, 'We got a good provider');
     my ($content,$error,$mod_date) = $ts3->_template_content('helloworld.tt');
-    diag( "Values are: ".Dumper($content, $error, $mod_date));
+    note( "Values are: ".Dumper($content, $error, $mod_date));
     ok(defined $content, 'We are able to get content from S3 ' . ((defined $error) ? "error: $error" : ''));
     
     SKIP:{
@@ -75,7 +75,7 @@ sub process_template($$$$) {
     SKIP:{
       skip 'Can not check an undefined value. ', 1 unless defined $output;
       ok($output=~/$expected/i, 'Content is what we expected');
-      diag("The output is: $output");
+      note("The output is: $output");
     }
 }
 sub template_setup() {

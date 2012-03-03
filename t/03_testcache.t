@@ -55,8 +55,8 @@ sub do_retrieval_test {
    my @keys;
    until( $stream->is_done ){
      foreach my $object ( $stream->items ){
-        #diag( 'Found object: '.$object->key );
-        #diag( 'Does object exists: '.$object->exists );
+        note( 'Found object: '.$object->key );
+        note( 'Does object exists: '.$object->exists );
         push @keys, [$object->key, !!$object->exists];
      }
    }
@@ -81,7 +81,7 @@ sub do_basic_test {
     
     ok($ts3, 'We got a good provider');
     my ($content,$error,$mod_date) = $ts3->_template_content('helloworld.tt');
-    diag( "Values are: ".Dumper($content, $error, $mod_date));
+    note( "Values are: ".Dumper($content, $error, $mod_date));
     ok(defined $content, 'We are able to get content from S3 ' . ((defined $error) ? "error: $error" : ''));
     
     SKIP:{
@@ -101,6 +101,7 @@ sub process_template($$$$) {
     diag(' Got template error of: '. $err ) if $err;
     SKIP:{
       skip 'Can not check an undefined value. ', 1 unless defined $output;
+      note( " Output is: $output" );
       ok($output=~/$expected/i, 'Content is what we expected');
     }
 
@@ -118,7 +119,7 @@ sub do_template_tests {
        my $cobj = $ts3->_get_object( key => 'helloworld.tt' );
        ok( $cobj, 'The cache contains an object for template "helloworld.tt"' );
        my $cache_obj = $cobj || {}; 
-       diag Dumper $cache_obj;
+       note Dumper $cache_obj;
        ok( $cache_obj->{template}, 'The template contains a value for template "helloworld.tt"');
        ok( $cache_obj->{last_modified}, 'The date contains a value for template "helloworld.tt"');
        my $cache_template = $cache_obj->{template} ? $cache_obj->{template} : '__UNDEF_SHOULD_NOT_MATCH_ANYTHING__';

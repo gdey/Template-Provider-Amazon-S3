@@ -31,7 +31,7 @@ sub process_template($$$$) {
     SKIP:{
       skip 'Can not check an undefined value. ', 1 unless defined $output;
       ok($output=~/$expected/i, 'Content is what we expected');
-      diag("The output is: $output");
+      note("The output is: $output");
     }
 }
 sub template_setup() {
