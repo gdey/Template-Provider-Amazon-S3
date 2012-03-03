@@ -5,7 +5,7 @@ use warnings;
 
 package Template::Provider::Amazon::S3;
 
-# ABSTRACT: Enable template toolkit to use Amazon's S3 service as a provier of templates.
+# ABSTRACT: Enable template toolkit to use Amazon's S3 service as a provider of templates.
 use base 'Template::Provider';
 
 # use version 0.77; our $VERSION = version->declare("v0.0.1");
