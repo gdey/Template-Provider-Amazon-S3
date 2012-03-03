@@ -1,0 +1,27 @@
+=head1 NAME
+
+Template::Provider::Amazon::S3
+
+=head1 DESCRIPTION
+
+This plugin provides template toolkit with the ability to use Amazon's S3
+service as a template store.
+
+=head1 More
+
+You can read the documentation that comes with the main module. If
+anything does not make sense, let me know. I want to improve this module,
+and make it useful to everyone. I welcome patches, suggestions and comments.
+
+=head1 AUTHOR
+
+Gautam Dey<gdey@cpan.org>
+
+=head1 COPYRIGHT AND LICENSE
+
+This software is copyright (c) 2012 by Gautam Dey <gdey@cpan.org>.
+
+This is free software; you can redistribute it and/or modify it under
+the same terms as the Perl 5 programming language system itself.
+
+
