@@ -15,9 +15,9 @@ unless( $ENV{AWS_ACCESS_KEY_ID} &&
 }
 
 eval 'use Template';
-plan skip_all => 'Test can not continue withot Template Toolkit installed. ' if $@;
+plan skip_all => 'Test can not continue without Template Toolkit installed. ' if $@;
 eval 'use Net::Amazon::S3';
-plan skip_all => 'Test can not continue withote Net::Amazon::S3 installed. ' if $@;
+plan skip_all => 'Test can not continue without Net::Amazon::S3 installed. ' if $@;
 use_ok('Template::Provider::Amazon::S3') 
 
 
