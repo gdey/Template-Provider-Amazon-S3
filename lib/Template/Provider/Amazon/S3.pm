@@ -234,7 +234,6 @@ use Data::Dumper;
 
         my $self   = shift;
         my $key    = shift;
-        $DB::Signal = 1;
         my $bucket = $self->bucket;
         return unless $bucket;
         my $stream = $bucket->list;
@@ -351,7 +350,6 @@ sub _template_content {
       unless $self->bucket;
     my $object;
     try {
-        $DB::signal = 1;
         my $template_obj = $self->object( key => $template );
         my ( $data, $mod_date ); 
         if( $template_obj  ){
